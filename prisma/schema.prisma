@@ -1,0 +1,185 @@
+// schema.prisma
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model dentista {
+  id                  Int      @id @default(autoincrement())
+  // Datos Personales
+  nombre              String
+  apellidoPaterno     String
+  apellidoMaterno     String
+  role                String   @default("dentist")
+  fechaNacimiento     DateTime
+  correoElectronico   String   @unique
+  contrasena          String
+  numeroTelefono      String
+  estadoCivil         String
+  sexo                String
+  lugarNacimiento     String
+  nacionalidad        String
+  cargo               String
+  rfc                 String   @unique
+  numeroSeguroSocial  String?
+  turnoLaboral        String
+  tieneAlergia        Boolean  @default(false)
+  tieneHijos          Boolean  @default(false)
+  tieneDiscapacidad   Boolean  @default(false)
+  esZurdo             Boolean  @default(false)
+  fotoPerfil          String?
+
+  // Datos Profesionales
+  universidad         String
+  tituloObtenido      String
+  anoGraduacion       Int
+  especialidad        String
+  paisEstudio         String
+  numeroCedula        String   @unique
+  licenciaPractica    String
+  anosExperiencia     Int
+
+  // Relaciones
+  certificaciones     Certificacion[]
+  clinicasPrevias     ClinicaPrevia[]
+  procedimientos      Procedimiento[]
+
+  // Timestamps
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Certificacion {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  dentistaId Int
+  dentista  dentista @relation(fields: [dentistaId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([dentistaId])
+}
+
+model ClinicaPrevia {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  dentistaId Int
+  dentista  dentista @relation(fields: [dentistaId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([dentistaId])
+}
+
+model Procedimiento {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  dentistaId Int
+  dentista  dentista @relation(fields: [dentistaId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([dentistaId])
+}
+
+model paciente {
+  id                    Int       @id @default(autoincrement())
+  // Datos Personales
+  nombre               String
+  apellidoPaterno      String
+  apellidoMaterno      String
+  fechaNacimiento      DateTime
+  correoElectronico    String?    @unique
+  role                 String     @default("patient")
+  contrasena           String 
+  numeroTelefono       String?
+  nacionalidad         String
+  fechaRegistro        DateTime   @default(now())
+  sexo                 String
+  tieneAlergia         Boolean    @default(false)
+  fotoPerfil           String?
+
+  // Historial Odontológico
+  motivoConsulta       String?
+  ultimaVisita         DateTime?
+  doloresDentales      String?
+  condicionActual      String?
+
+  // Diagnóstico
+  labios               String?
+  encias               String?
+  pisoBoca             String?
+  vestibulos           String?
+  paladar              String?
+  temporoMandibula     String?
+  carrillos            String?
+  lengua               String?
+  cuello               String?
+
+  // Relaciones
+  citas                citas[]
+  procedimientosAnteriores ProcedimientoAnterior[]
+
+  // Timestamps
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+}
+
+model ProcedimientoAnterior {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  pacienteId Int
+  paciente  paciente @relation(fields: [pacienteId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([pacienteId])
+}
+
+model citas {
+  id            Int      @id @default(autoincrement())
+  nombre        String
+  telefono      String
+  fechaHora     DateTime
+  servicioId    Int
+  servicio      servicios @relation(fields: [servicioId], references: [id])
+  comentarios   String?
+
+  // Relación con el paciente
+  pacienteId    Int
+  paciente      paciente @relation(fields: [pacienteId], references: [id])
+
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([pacienteId])
+  @@index([servicioId])
+}
+
+model servicios {
+  id            Int      @id @default(autoincrement())
+  nombre        String   @unique
+  descripcion   String?
+  duracion      Int?     // Duración estimada en minutos
+  
+  // Categoría del servicio
+  categoria     ServiceCategory @default(GENERAL)
+
+  // Relación con citas
+  citas        citas[]
+
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum ServiceCategory {
+  GENERAL
+  RESTAURATIVO
+  ESTETICO
+  QUIRURGICO
+  ORTODONTICO
+  PROTESICO
+}
+

@@ -50,7 +50,6 @@ export class CitasService {
   }
 
   async create(createCitaDto: CreateCitaDto) {
-    // Verificar si el servicio existe
     const servicio = await this.prisma.servicios.findUnique({
       where: { id: createCitaDto.servicioId },
     });
@@ -59,7 +58,6 @@ export class CitasService {
       throw new NotFoundException('El servicio especificado no existe');
     }
 
-    // Verificar si el paciente existe y asi se obtiene su nombre completo
     const paciente = await this.prisma.paciente.findUnique({
       where: { id: createCitaDto.pacienteId },
     });
@@ -68,10 +66,8 @@ export class CitasService {
       throw new NotFoundException('El paciente especificado no existe');
     }
 
-    
     const nombreCompleto = `${paciente.nombre} ${paciente.apellidoPaterno} ${paciente.apellidoMaterno}`;
 
-   
     return this.prisma.citas.create({
       data: {
         nombre: nombreCompleto,
@@ -95,7 +91,6 @@ export class CitasService {
   async update(id: number, updateCitaDto: Partial<CreateCitaDto>) {
     const existingCita = await this.findOne(id);
 
-    
     let nombreCompleto = existingCita.nombre;
     if (updateCitaDto.pacienteId) {
       const paciente = await this.prisma.paciente.findUnique({
@@ -145,27 +140,9 @@ export class CitasService {
   }
 
   async remove(id: number) {
-    await this.findOne(id); // Verificar si la cita existe
+    await this.findOne(id);
     return this.prisma.citas.delete({
       where: { id }
-    });
-  }
-
-  async findCalendarAppointments(inicio: Date, fin: Date) {
-    return this.prisma.citas.findMany({
-      where: {
-        fechaHora: {
-          gte: inicio,
-          lte: fin,
-        },
-      },
-      include: { 
-        paciente: true, 
-        servicio: true 
-      },
-      orderBy: {
-        fechaHora: 'asc',
-      },
     });
   }
 
@@ -191,6 +168,69 @@ export class CitasService {
       console.error('Error al buscar citas:', error);
       throw error;
     }
+  }
+
+  async getDashboardData() {
+    const [totalCitas, citasPendientes, citasPorServicio] = await Promise.all([
+      this.prisma.citas.count(),
+      this.prisma.citas.count({
+        where: {
+          fechaHora: {
+            gte: new Date(),
+          },
+        },
+      }),
+      this.prisma.citas.groupBy({
+        by: ['servicioId'],
+        _count: {
+          id: true
+        },
+      })
+    ]);
+
+    const citasCompletadas = totalCitas - citasPendientes;
+
+    const servicios = await this.prisma.servicios.findMany();
+    const serviciosMap = new Map(servicios.map(s => [s.id, s.nombre]));
+
+    const appointmentsByService = await this.prisma.citas.groupBy({
+      by: ['servicioId'],
+      _count: {
+        id: true
+      },
+      where: {
+        fechaHora: {
+          gte: new Date(),
+        },
+      },
+    });
+
+    const citasPorServicioMap = new Map();
+    appointmentsByService.forEach(item => {
+      const servicioNombre = serviciosMap.get(item.servicioId) || 'Desconocido';
+      citasPorServicioMap.set(servicioNombre, item._count.id);
+    });
+
+    const totalAppointments = Array.from(citasPorServicioMap.values()).reduce((sum, count) => sum + count, 0);
+
+    const serviceDistribution = Array.from(citasPorServicioMap.entries()).map(([servicio, count]) => ({
+      servicio,
+      porcentaje: (count / totalAppointments) * 100
+    }));
+
+    return {
+      metrics: {
+        totalCitas,
+        citasCompletadas,
+        citasPendientes
+      },
+      appointmentsByService: Array.from(citasPorServicioMap.entries()).map(([servicio, citasProgramadas]) => ({
+        servicio,
+        citasProgramadas,
+        citasCompletadas: citasPorServicio.find(c => serviciosMap.get(c.servicioId) === servicio)?._count.id || 0
+      })),
+      serviceDistribution
+    };
   }
 }
 

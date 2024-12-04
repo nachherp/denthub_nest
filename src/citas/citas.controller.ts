@@ -13,7 +13,6 @@ export class CitasController {
     return this.citasService.findAll();
   }
 
-  
   @Get('paciente/:pacienteId')
   findByPaciente(@Param('pacienteId') pacienteId: string) {
     console.log('Buscando citas para el paciente:', pacienteId);
@@ -43,6 +42,11 @@ export class CitasController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.citasService.remove(+id);
+  }
+
+  @Get('dashboard')
+  getDashboardData() {
+    return this.citasService.getDashboardData();
   }
 }
 

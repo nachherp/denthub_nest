@@ -38,6 +38,28 @@ export class AuthController {
     }
   }
 
+  @Post('google')
+  async googleLogin(@Body() body: { token: string }) {
+    try {
+      const result = await this.authService.googleLogin(body.token);
+      return result;
+    } catch (error) {
+      console.error('Google login error:', error);
+      throw new UnauthorizedException('Error en la autenticación con Google');
+    }
+  }
+
+  @Post('facebook')
+  async facebookLogin(@Body() body: { token: string }) {
+    try {
+      const result = await this.authService.facebookLogin(body.token);
+      return result;
+    } catch (error) {
+      console.error('Facebook login error:', error);
+      throw new UnauthorizedException('Error en la autenticación con Facebook');
+    }
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('profile')
   getProfile(@Request() req) {

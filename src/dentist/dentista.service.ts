@@ -56,5 +56,38 @@ export class DentistaService {
       throw new UnauthorizedException('Token inválido');
     }
   }
+
+  async actualizarPerfil(id: number, datosActualizados: any, token: string) {
+    if (!token) {
+      throw new UnauthorizedException('Token no proporcionado');
+    }
+
+    try {
+      const decodedToken = this.jwtService.verify(token, {
+        secret: process.env.JWT_SECRET || '12345'
+      }) as JwtPayload;
+
+      if (decodedToken.role !== 'dentist') {
+        throw new UnauthorizedException('El usuario no es un dentista');
+      }
+
+      const dentista = await this.prisma.dentista.update({
+        where: { id },
+        data: datosActualizados,
+      });
+
+      if (!dentista) {
+        throw new NotFoundException('Perfil de dentista no encontrado');
+      }
+
+      return dentista;
+    } catch (error) {
+      console.error('Error completo en actualizarPerfil:', error);
+      if (error instanceof UnauthorizedException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new UnauthorizedException('Token inválido o error al actualizar');
+    }
+  }
 }
 

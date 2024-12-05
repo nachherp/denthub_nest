@@ -93,6 +93,8 @@ model paciente {
   correoElectronico    String?    @unique
   role                 String     @default("patient")
   contrasena           String 
+  googleId    String?   @unique
+  facebookId  String?   @unique
   numeroTelefono       String?
   nacionalidad         String
   fechaRegistro        DateTime   @default(now())

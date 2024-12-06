@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreatePacienteDto, UpdatePacienteDto } from './dto/paciente.dto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class PacientesService {
@@ -68,6 +69,76 @@ export class PacientesService {
     });
 
     return imageUrl;
+  }
+
+  async getDashboardData() {
+    const totalPacientes = await this.prisma.paciente.count();
+    
+    const pacientes = await this.prisma.paciente.findMany({
+      select: {
+        fechaNacimiento: true,
+        sexo: true,
+      },
+    });
+
+    const ageDistribution = this.calculateAgeDistribution(pacientes);
+    const sexDistribution = await this.prisma.paciente.groupBy({
+      by: ['sexo'],
+      _count: {
+        _all: true
+      },
+    });
+
+    return {
+      metrics: {
+        totalPacientes,
+      },
+      ageDistribution,
+      sexDistribution: sexDistribution.map(item => ({
+        sex: item.sexo,
+        count: item._count._all
+      }))
+    };
+  }
+
+  private calculateAgeDistribution(pacientes: { fechaNacimiento: Date; sexo: string }[]) {
+    const ageGroups = {
+      '0-18': { Masculino: 0, Femenino: 0 },
+      '19-30': { Masculino: 0, Femenino: 0 },
+      '31-50': { Masculino: 0, Femenino: 0 },
+      '51+': { Masculino: 0, Femenino: 0 },
+    };
+
+    pacientes.forEach(paciente => {
+      const age = this.calculateAge(paciente.fechaNacimiento);
+      const sex = paciente.sexo;
+      let ageGroup;
+
+      if (age <= 18) ageGroup = '0-18';
+      else if (age <= 30) ageGroup = '19-30';
+      else if (age <= 50) ageGroup = '31-50';
+      else ageGroup = '51+';
+
+      if (sex === 'Masculino' || sex === 'Femenino') {
+        ageGroups[ageGroup][sex]++;
+      }
+    });
+
+    return Object.entries(ageGroups).map(([ageGroup, counts]) => ({
+      ageGroup,
+      Masculino: counts.Masculino,
+      Femenino: counts.Femenino,
+    }));
+  }
+
+  private calculateAge(birthDate: Date): number {
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
   }
 }
 

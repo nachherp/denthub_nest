@@ -39,5 +39,10 @@ export class PacientesController {
   uploadImage(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
     return this.pacientesService.uploadImage(+id, file);
   }
+
+  @Get('dashboard/data')
+  getDashboardData() {
+    return this.pacientesService.getDashboardData();
+  }
 }
 

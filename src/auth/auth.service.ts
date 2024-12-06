@@ -161,18 +161,18 @@ export class AuthService {
         where: { facebookId }
       });
 
-      // Si no se encuentra por facebookId y hay un email, buscamos por email
+      // Si no se encuentra por facebookId y hay un correo que este en nuestra bd, buscamos por el correo
       if (!user && email) {
         user = await this.prisma.paciente.findUnique({
           where: { correoElectronico: email }
         });
       }
 
-      // Si aún no se encuentra el usuario, creamos uno nuevo
+      // Si aún no se encuentra el paciente, creamos uno nuevo
       if (!user) {
         user = await this.prisma.paciente.create({
           data: {
-            correoElectronico: email || `fb_${facebookId}@placeholder.com`, // Email de respaldo si no se proporciona
+            correoElectronico: email || `fb_${facebookId}@placeholder.com`, // Correo de respaldo si no se proporciona
             nombre: name,
             facebookId,
             fotoPerfil: picture?.data?.url,

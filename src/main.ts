@@ -4,7 +4,9 @@ import { Logger } from '@nestjs/common';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: ['error', 'warn', 'log', 'debug'], // Added 'debug' here
+  });
   
   app.enableCors({
     origin: 'http://localhost:5173',

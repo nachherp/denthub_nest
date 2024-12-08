@@ -45,4 +45,3 @@ export class PacientesController {
     return this.pacientesService.getDashboardData();
   }
 }
-

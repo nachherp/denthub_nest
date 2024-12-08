@@ -1,142 +1,245 @@
-import { IsNotEmpty, IsString, IsDate, IsEmail, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsDate, IsBoolean, IsArray, ValidateNested, IsEnum, IsEmail, IsPhoneNumber } from 'class-validator';
 import { Type } from 'class-transformer';
+import { Prisma } from '@prisma/client';
 
-export class CreatePacienteDto {
-  @IsNotEmpty()
+enum Sexo {
+  Masculino = 'Masculino',
+  Femenino = 'Femenino'
+}
+
+class ProcedimientoAnteriorCreateInput implements Prisma.ProcedimientoAnteriorCreateWithoutPacienteInput {
   @IsString()
   nombre: string;
 
-  @IsNotEmpty()
+  @IsString()
+  descripcion: string;
+}
+
+export class CreatePacienteDto implements Omit<Prisma.pacienteCreateInput, 'id' | 'createdAt' | 'updatedAt'> {
+  @IsString()
+  nombre: string;
+
   @IsString()
   apellidoPaterno: string;
 
-  @IsNotEmpty()
   @IsString()
   apellidoMaterno: string;
 
-  @IsNotEmpty()
-  @Type(() => Date)
   @IsDate()
+  @Type(() => Date)
   fechaNacimiento: Date;
 
-  @IsNotEmpty()
-  @IsString()
-  telefono: string;
-
-  @IsNotEmpty()
   @IsEmail()
-  email: string;
+  correoElectronico: string;
 
-  @IsNotEmpty()
   @IsString()
   contrasena: string;
 
-  @IsNotEmpty()
+  @IsPhoneNumber()
+  numeroTelefono: string;
+
   @IsString()
   nacionalidad: string;
 
-  @IsNotEmpty()
-  @IsString()
-  sexo: string;
+  @IsEnum(Sexo)
+  sexo: Sexo;
 
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  ultimaCita?: Date;
-
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  proximaCita?: Date;
-
-  @IsOptional()
-  @IsString()
-  tratamiento?: string;
-
-  @IsOptional()
   @IsBoolean()
-  tieneAlergia?: boolean;
+  tieneAlergia: boolean;
 
-  @IsOptional()
   @IsString()
-  motivoConsulta?: string;
-
   @IsOptional()
-  @IsString()
   fotoPerfil?: string;
 
+  @IsString()
   @IsOptional()
+  motivoConsulta?: string;
+
+  @IsDate()
+  @IsOptional()
+  @Type(() => Date)
+  ultimaVisita?: Date;
+
+  @IsString()
+  @IsOptional()
+  doloresDentales?: string;
+
+  @IsString()
+  @IsOptional()
+  condicionActual?: string;
+
   @IsBoolean()
+  @IsOptional()
   tratamientoCompletado?: boolean;
+
+  @IsString()
+  @IsOptional()
+  labios?: string;
+
+  @IsString()
+  @IsOptional()
+  encias?: string;
+
+  @IsString()
+  @IsOptional()
+  pisoBoca?: string;
+
+  @IsString()
+  @IsOptional()
+  vestibulos?: string;
+
+  @IsString()
+  @IsOptional()
+  paladar?: string;
+
+  @IsString()
+  @IsOptional()
+  temporoMandibula?: string;
+
+  @IsString()
+  @IsOptional()
+  carrillos?: string;
+
+  @IsString()
+  @IsOptional()
+  lengua?: string;
+
+  @IsString()
+  @IsOptional()
+  cuello?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProcedimientoAnteriorCreateInput)
+  @IsOptional()
+  procedimientosAnteriores?: Prisma.ProcedimientoAnteriorCreateNestedManyWithoutPacienteInput;
 }
 
-export class UpdatePacienteDto {
-  @IsOptional()
+export class UpdatePacienteDto implements Partial<Omit<CreatePacienteDto, 'contrasena'>> {
   @IsString()
+  @IsOptional()
   nombre?: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   apellidoPaterno?: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   apellidoMaterno?: string;
 
+  @IsDate()
   @IsOptional()
   @Type(() => Date)
-  @IsDate()
   fechaNacimiento?: Date;
 
-  @IsOptional()
-  @IsString()
-  telefono?: string;
-
-  @IsOptional()
   @IsEmail()
-  email?: string;
-
   @IsOptional()
-  @IsString()
-  contrasena?: string;
+  correoElectronico?: string;
 
+  @IsPhoneNumber()
   @IsOptional()
+  numeroTelefono?: string;
+
   @IsString()
+  @IsOptional()
   nacionalidad?: string;
 
+  @IsEnum(Sexo)
   @IsOptional()
-  @IsString()
-  sexo?: string;
+  sexo?: Sexo;
 
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  ultimaCita?: Date;
-
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  proximaCita?: Date;
-
-  @IsOptional()
-  @IsString()
-  tratamiento?: string;
-
-  @IsOptional()
   @IsBoolean()
+  @IsOptional()
   tieneAlergia?: boolean;
 
-  @IsOptional()
   @IsString()
-  motivoConsulta?: string;
-
   @IsOptional()
-  @IsString()
   fotoPerfil?: string;
 
+  @IsString()
   @IsOptional()
+  motivoConsulta?: string;
+
+  @IsDate()
+  @IsOptional()
+  @Type(() => Date)
+  ultimaVisita?: Date;
+
+  @IsString()
+  @IsOptional()
+  doloresDentales?: string;
+
+  @IsString()
+  @IsOptional()
+  condicionActual?: string;
+
   @IsBoolean()
+  @IsOptional()
   tratamientoCompletado?: boolean;
 
-  
-} 
+  @IsString()
+  @IsOptional()
+  labios?: string;
+
+  @IsString()
+  @IsOptional()
+  encias?: string;
+
+  @IsString()
+  @IsOptional()
+  pisoBoca?: string;
+
+  @IsString()
+  @IsOptional()
+  vestibulos?: string;
+
+  @IsString()
+  @IsOptional()
+  paladar?: string;
+
+  @IsString()
+  @IsOptional()
+  temporoMandibula?: string;
+
+  @IsString()
+  @IsOptional()
+  carrillos?: string;
+
+  @IsString()
+  @IsOptional()
+  lengua?: string;
+
+  @IsString()
+  @IsOptional()
+  cuello?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProcedimientoAnteriorCreateInput)
+  @IsOptional()
+  procedimientosAnteriores?: Prisma.ProcedimientoAnteriorUpdateManyWithoutPacienteNestedInput;
+}
+
+export class UpdatePerfilBasicoDto {
+  @IsString()
+  @IsOptional()
+  nombre?: string;
+
+  @IsString()
+  @IsOptional()
+  apellidoPaterno?: string;
+
+  @IsString()
+  @IsOptional()
+  apellidoMaterno?: string;
+
+  @IsEmail()
+  @IsOptional()
+  correoElectronico?: string;
+
+  @IsPhoneNumber()
+  @IsOptional()
+  numeroTelefono?: string;
+}
+

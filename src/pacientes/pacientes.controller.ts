@@ -1,8 +1,7 @@
-import { Controller, Get, Post, Body, Put, Param, Delete, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PacientesService } from './pacientes.service';
-import { CreatePacienteDto, UpdatePacienteDto } from './dto/paciente.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { CreatePacienteDto, UpdatePacienteDto, UpdatePerfilBasicoDto } from './dto/paciente.dto';
 
 @Controller('pacientes')
 @UseGuards(JwtAuthGuard)
@@ -34,14 +33,14 @@ export class PacientesController {
     return this.pacientesService.remove(+id);
   }
 
-  @Post(':id/upload-image')
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadImage(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
-    return this.pacientesService.uploadImage(+id, file);
-  }
-
   @Get('dashboard/data')
-  getDashboardData() {
+  async getDashboardData() {
     return this.pacientesService.getDashboardData();
   }
+
+  @Put(':id/perfil')
+  updatePerfil(@Param('id') id: string, @Body() updatePerfilBasicoDto: UpdatePerfilBasicoDto) {
+    return this.pacientesService.updatePerfilBasico(+id, updatePerfilBasicoDto);
+  }
 }
+

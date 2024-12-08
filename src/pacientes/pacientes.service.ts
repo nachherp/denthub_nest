@@ -1,9 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreatePacienteDto, UpdatePacienteDto } from './dto/paciente.dto';
-import * as fs from 'fs';
-import * as path from 'path';
 import { Prisma } from '@prisma/client';
+import { CreatePacienteDto, UpdatePacienteDto, UpdatePerfilBasicoDto } from './dto/paciente.dto';
 
 @Injectable()
 export class PacientesService {
@@ -16,7 +14,9 @@ export class PacientesService {
   async findOne(id: number) {
     const paciente = await this.prisma.paciente.findUnique({
       where: { id },
-      include: { procedimientosAnteriores: true },
+      include: {
+        procedimientosAnteriores: true
+      }
     });
     if (!paciente) {
       throw new NotFoundException(`Paciente con ID ${id} no encontrado`);
@@ -25,72 +25,77 @@ export class PacientesService {
   }
 
   async create(createPacienteDto: CreatePacienteDto) {
+    const { procedimientosAnteriores, ...pacienteData } = createPacienteDto;
     return this.prisma.paciente.create({
-      data: createPacienteDto,
+      data: {
+        ...pacienteData,
+        procedimientosAnteriores: procedimientosAnteriores
+      },
+      include: {
+        procedimientosAnteriores: true
+      }
     });
   }
 
   async update(id: number, updatePacienteDto: UpdatePacienteDto) {
-    const paciente = await this.findOne(id);
+    const { procedimientosAnteriores, ...otherData } = updatePacienteDto;
 
-    let data: any = { ...updatePacienteDto };
+    const updateData: Prisma.pacienteUpdateInput = {
+      ...otherData,
+    };
 
-    if (updatePacienteDto.tratamientoCompletado && paciente.motivoConsulta) {
-      // Move current treatment to procedimientosAnteriores
-      data.procedimientosAnteriores = {
-        create: {
-          descripcion: paciente.motivoConsulta,
-          fechaRealizacion: new Date(),
-        },
+    if (procedimientosAnteriores) {
+      updateData.procedimientosAnteriores = {
+        create: procedimientosAnteriores.create,
+        update: procedimientosAnteriores.update,
+        delete: procedimientosAnteriores.delete,
       };
-      data.motivoConsulta = null; // Clear current treatment
-      data.tratamientoCompletado = false; // Reset treatment completed status
     }
 
-    return this.prisma.paciente.update({
-      where: { id },
-      data,
-      include: { procedimientosAnteriores: true },
-    });
+    try {
+      return await this.prisma.paciente.update({
+        where: { id },
+        data: updateData,
+        include: {
+          procedimientosAnteriores: true
+        }
+      });
+    } catch (error) {
+      console.error('Error al actualizar el paciente:', error);
+      throw new Error('No se pudo actualizar el paciente. Por favor, revise los datos e intente de nuevo.');
+    }
   }
 
   async remove(id: number) {
-    await this.findOne(id); // Verifica si el paciente existe
-    return this.prisma.paciente.delete({
-      where: { id },
-    });
-  }
-
-  async uploadImage(id: number, file: Express.Multer.File) {
     const paciente = await this.findOne(id);
-    
-    // Crear directorio si no existe
-    const uploadPath = path.join(__dirname, '..', '..', 'public', 'profile-images');
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
+    if (!paciente) {
+      throw new NotFoundException(`Paciente con ID ${id} no encontrado`);
     }
 
-    // Generar nombre de archivo único
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const filename = `${paciente.id}-${uniqueSuffix}${path.extname(file.originalname)}`;
-    
-    // Guardar archivo
-    const filepath = path.join(uploadPath, filename);
-    fs.writeFileSync(filepath, file.buffer);
+    try {
+      // Start a transaction
+      return await this.prisma.$transaction(async (prisma) => {
+        // Delete related records
+        await prisma.citas.deleteMany({ where: { pacienteId: id } });
+        await prisma.procedimientoAnterior.deleteMany({ where: { pacienteId: id } });
+        // Add more deleteMany operations for other related tables if necessary
 
-    // Actualizar paciente con nueva ruta de imagen
-    const imageUrl = `/profile-images/${filename}`;
-    await this.prisma.paciente.update({
-      where: { id },
-      data: { fotoPerfil: imageUrl },
-    });
-
-    return imageUrl;
+        // Finally, delete the patient
+        return prisma.paciente.delete({ where: { id } });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2003') {
+          throw new ConflictException('No se puede eliminar el paciente debido a registros relacionados.');
+        }
+      }
+      throw error;
+    }
   }
 
   async getDashboardData() {
     const totalPacientes = await this.prisma.paciente.count();
-    
+  
     const pacientes = await this.prisma.paciente.findMany({
       select: {
         fechaNacimiento: true,
@@ -98,8 +103,8 @@ export class PacientesService {
       },
     });
 
-    const ageDistribution = this.calculateAgeDistribution(pacientes);
-    const sexDistribution = await this.prisma.paciente.groupBy({
+    const distribucionEdades = this.calcularDistribucionEdades(pacientes);
+    const distribucionSexos = await this.prisma.paciente.groupBy({
       by: ['sexo'],
       _count: {
         _all: true
@@ -110,16 +115,16 @@ export class PacientesService {
       metrics: {
         totalPacientes,
       },
-      ageDistribution,
-      sexDistribution: sexDistribution.map(item => ({
-        sex: item.sexo,
-        count: item._count._all
+      distribucionEdades,
+      distribucionSexos: distribucionSexos.map(item => ({
+        sexo: item.sexo,
+        cantidad: item._count._all
       }))
     };
   }
 
-  private calculateAgeDistribution(pacientes: { fechaNacimiento: Date; sexo: string }[]) {
-    const ageGroups = {
+  private calcularDistribucionEdades(pacientes: { fechaNacimiento: Date; sexo: string }[]) {
+    const gruposEdades = {
       '0-18': { Masculino: 0, Femenino: 0 },
       '19-30': { Masculino: 0, Femenino: 0 },
       '31-50': { Masculino: 0, Femenino: 0 },
@@ -127,34 +132,42 @@ export class PacientesService {
     };
 
     pacientes.forEach(paciente => {
-      const age = this.calculateAge(paciente.fechaNacimiento);
-      const sex = paciente.sexo;
-      let ageGroup;
+      const edad = this.calcularEdad(paciente.fechaNacimiento);
+      const sexo = paciente.sexo;
+      let grupoEdad;
 
-      if (age <= 18) ageGroup = '0-18';
-      else if (age <= 30) ageGroup = '19-30';
-      else if (age <= 50) ageGroup = '31-50';
-      else ageGroup = '51+';
+      if (edad <= 18) grupoEdad = '0-18';
+      else if (edad <= 30) grupoEdad = '19-30';
+      else if (edad <= 50) grupoEdad = '31-50';
+      else grupoEdad = '51+';
 
-      if (sex === 'Masculino' || sex === 'Femenino') {
-        ageGroups[ageGroup][sex]++;
+      if (sexo === 'Masculino' || sexo === 'Femenino') {
+        gruposEdades[grupoEdad][sexo]++;
       }
     });
 
-    return Object.entries(ageGroups).map(([ageGroup, counts]) => ({
-      ageGroup,
-      Masculino: counts.Masculino,
-      Femenino: counts.Femenino,
+    return Object.entries(gruposEdades).map(([grupoEdad, conteo]) => ({
+      grupoEdad,
+      Masculino: conteo.Masculino,
+      Femenino: conteo.Femenino,
     }));
   }
 
-  private calculateAge(birthDate: Date): number {
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
+  private calcularEdad(fechaNacimiento: Date): number {
+    const hoy = new Date();
+    let edad = hoy.getFullYear() - fechaNacimiento.getFullYear();
+    const m = hoy.getMonth() - fechaNacimiento.getMonth();
+    if (m < 0 || (m === 0 && hoy.getDate() < fechaNacimiento.getDate())) {
+      edad--;
     }
-    return age;
+    return edad;
+  }
+
+  async updatePerfilBasico(id: number, updatePerfilBasicoDto: UpdatePerfilBasicoDto) {
+    return this.prisma.paciente.update({
+      where: { id },
+      data: updatePerfilBasicoDto,
+    });
   }
 }
+

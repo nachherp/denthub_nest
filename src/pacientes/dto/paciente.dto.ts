@@ -64,6 +64,10 @@ export class CreatePacienteDto {
   @IsOptional()
   @IsString()
   fotoPerfil?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  tratamientoCompletado?: boolean;
 }
 
 export class UpdatePacienteDto {
@@ -129,5 +133,10 @@ export class UpdatePacienteDto {
   @IsOptional()
   @IsString()
   fotoPerfil?: string;
-}
 
+  @IsOptional()
+  @IsBoolean()
+  tratamientoCompletado?: boolean;
+
+  
+} 

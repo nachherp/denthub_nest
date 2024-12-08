@@ -16,6 +16,7 @@ export class PacientesService {
   async findOne(id: number) {
     const paciente = await this.prisma.paciente.findUnique({
       where: { id },
+      include: { procedimientosAnteriores: true },
     });
     if (!paciente) {
       throw new NotFoundException(`Paciente con ID ${id} no encontrado`);
@@ -30,10 +31,26 @@ export class PacientesService {
   }
 
   async update(id: number, updatePacienteDto: UpdatePacienteDto) {
-    await this.findOne(id); // Verifica si el paciente existe
+    const paciente = await this.findOne(id);
+
+    let data: any = { ...updatePacienteDto };
+
+    if (updatePacienteDto.tratamientoCompletado && paciente.motivoConsulta) {
+      // Move current treatment to procedimientosAnteriores
+      data.procedimientosAnteriores = {
+        create: {
+          descripcion: paciente.motivoConsulta,
+          fechaRealizacion: new Date(),
+        },
+      };
+      data.motivoConsulta = null; // Clear current treatment
+      data.tratamientoCompletado = false; // Reset treatment completed status
+    }
+
     return this.prisma.paciente.update({
       where: { id },
-      data: updatePacienteDto,
+      data,
+      include: { procedimientosAnteriores: true },
     });
   }
 
@@ -141,4 +158,3 @@ export class PacientesService {
     return age;
   }
 }
-

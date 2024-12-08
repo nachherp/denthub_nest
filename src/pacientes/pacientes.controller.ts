@@ -36,7 +36,7 @@ export class PacientesController {
 
   @Post(':id/upload-image')
   @UseInterceptors(FileInterceptor('file'))
-  uploadImage(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+  async uploadImage(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
     return this.pacientesService.uploadImage(+id, file);
   }
 

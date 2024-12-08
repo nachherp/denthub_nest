@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCitaDto } from './dto/crear-cita.dto';
 
@@ -10,8 +10,8 @@ export class CitasService {
     return this.prisma.citas.findMany({
       include: {
         paciente: true,
-        servicio: true
-      }
+        servicio: true,
+      },
     });
   }
 
@@ -21,11 +21,9 @@ export class CitasService {
         fechaHora: {
           gte: new Date(),
         },
+        completada: false,
       },
-      include: { 
-        paciente: true, 
-        servicio: true 
-      },
+      include: { paciente: true, servicio: true },
       orderBy: {
         fechaHora: 'asc',
       },
@@ -35,14 +33,9 @@ export class CitasService {
   async findCompleted() {
     return this.prisma.citas.findMany({
       where: {
-        fechaHora: {
-          lt: new Date(),
-        },
+        completada: true,
       },
-      include: { 
-        paciente: true, 
-        servicio: true 
-      },
+      include: { paciente: true, servicio: true },
       orderBy: {
         fechaHora: 'desc',
       },
@@ -55,7 +48,7 @@ export class CitasService {
     });
 
     if (!servicio) {
-      throw new NotFoundException('El servicio especificado no existe');
+      throw new NotFoundException('El servicio no existe');
     }
 
     const paciente = await this.prisma.paciente.findUnique({
@@ -68,23 +61,41 @@ export class CitasService {
 
     const nombreCompleto = `${paciente.nombre} ${paciente.apellidoPaterno} ${paciente.apellidoMaterno}`;
 
+    // Verificar disponibilidad
+    const fechaHoraUTC = new Date(createCitaDto.fechaHora);
+    const disponibilidad = await this.obtenerDisponibilidad(
+      fechaHoraUTC.toISOString().split('T')[0],
+    );
+
+    const horaSeleccionada = fechaHoraUTC.toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'UTC',
+    });
+
+    if (!disponibilidad.includes(horaSeleccionada)) {
+      throw new BadRequestException('La hora seleccionada no está disponible');
+    }
+
     return this.prisma.citas.create({
       data: {
         nombre: nombreCompleto,
         paciente: {
-          connect: { id: createCitaDto.pacienteId }
+          connect: { id: createCitaDto.pacienteId },
         },
         servicio: {
-          connect: { id: createCitaDto.servicioId }
+          connect: { id: createCitaDto.servicioId },
         },
         telefono: createCitaDto.telefono,
-        fechaHora: new Date(createCitaDto.fechaHora),
+        fechaHora: fechaHoraUTC,
         comentarios: createCitaDto.comentarios || '',
+        completada: false,
       },
       include: {
         paciente: true,
-        servicio: true
-      }
+        servicio: true,
+      },
     });
   }
 
@@ -107,19 +118,21 @@ export class CitasService {
       data: {
         nombre: nombreCompleto,
         ...(updateCitaDto.pacienteId && {
-          paciente: { connect: { id: updateCitaDto.pacienteId } }
+          paciente: { connect: { id: updateCitaDto.pacienteId } },
         }),
         ...(updateCitaDto.servicioId && {
-          servicio: { connect: { id: updateCitaDto.servicioId } }
+          servicio: { connect: { id: updateCitaDto.servicioId } },
         }),
         ...(updateCitaDto.telefono && { telefono: updateCitaDto.telefono }),
-        ...(updateCitaDto.fechaHora && { fechaHora: new Date(updateCitaDto.fechaHora) }),
+        ...(updateCitaDto.fechaHora && {
+          fechaHora: new Date(updateCitaDto.fechaHora),
+        }),
         ...(updateCitaDto.comentarios && { comentarios: updateCitaDto.comentarios }),
       },
       include: {
         paciente: true,
-        servicio: true
-      }
+        servicio: true,
+      },
     });
   }
 
@@ -128,8 +141,8 @@ export class CitasService {
       where: { id },
       include: {
         paciente: true,
-        servicio: true
-      }
+        servicio: true,
+      },
     });
 
     if (!cita) {
@@ -140,9 +153,12 @@ export class CitasService {
   }
 
   async remove(id: number) {
-    await this.findOne(id);
+    const cita = await this.findOne(id);
+    if (cita.completada) {
+      throw new BadRequestException('No se puede eliminar una cita completada');
+    }
     return this.prisma.citas.delete({
-      where: { id }
+      where: { id },
     });
   }
 
@@ -151,15 +167,15 @@ export class CitasService {
     try {
       const citas = await this.prisma.citas.findMany({
         where: {
-          pacienteId: pacienteId
+          pacienteId: pacienteId,
         },
         include: {
           servicio: true,
-          paciente: true
+          paciente: true,
         },
         orderBy: {
-          fechaHora: 'desc'
-        }
+          fechaHora: 'desc',
+        },
       });
 
       console.log('Citas encontradas:', citas);
@@ -171,66 +187,95 @@ export class CitasService {
   }
 
   async getDashboardData() {
-    const [totalCitas, citasPendientes, citasPorServicio] = await Promise.all([
+    const [totalCitas, citasPendientes, citasCompletadas] = await Promise.all([
       this.prisma.citas.count(),
       this.prisma.citas.count({
         where: {
           fechaHora: {
             gte: new Date(),
           },
+          completada: false,
         },
       }),
-      this.prisma.citas.groupBy({
-        by: ['servicioId'],
-        _count: {
-          id: true
+      this.prisma.citas.count({
+        where: {
+          completada: true,
         },
-      })
+      }),
     ]);
 
-    const citasCompletadas = totalCitas - citasPendientes;
-
     const servicios = await this.prisma.servicios.findMany();
-    const serviciosMap = new Map(servicios.map(s => [s.id, s.nombre]));
 
-    const appointmentsByService = await this.prisma.citas.groupBy({
+    const citasPorServicio = await this.prisma.citas.groupBy({
       by: ['servicioId'],
-      _count: {
-        id: true
-      },
-      where: {
-        fechaHora: {
-          gte: new Date(),
-        },
-      },
+      _count: true,
     });
 
-    const citasPorServicioMap = new Map();
-    appointmentsByService.forEach(item => {
-      const servicioNombre = serviciosMap.get(item.servicioId) || 'Desconocido';
-      citasPorServicioMap.set(servicioNombre, item._count.id);
-    });
+    const serviciosMap = new Map(servicios.map((s) => [s.id, s.nombre]));
 
-    const totalAppointments = Array.from(citasPorServicioMap.values()).reduce((sum, count) => sum + count, 0);
-
-    const serviceDistribution = Array.from(citasPorServicioMap.entries()).map(([servicio, count]) => ({
-      servicio,
-      porcentaje: (count / totalAppointments) * 100
+    const serviceDistribution = citasPorServicio.map((item) => ({
+      servicio: serviciosMap.get(item.servicioId) || 'Desconocido',
+      count: item._count,
     }));
 
     return {
       metrics: {
         totalCitas,
         citasCompletadas,
-        citasPendientes
+        citasPendientes,
       },
-      appointmentsByService: Array.from(citasPorServicioMap.entries()).map(([servicio, citasProgramadas]) => ({
-        servicio,
-        citasProgramadas,
-        citasCompletadas: citasPorServicio.find(c => serviciosMap.get(c.servicioId) === servicio)?._count.id || 0
-      })),
-      serviceDistribution
+      serviceDistribution,
     };
+  }
+
+  async obtenerDisponibilidad(fecha: string): Promise<string[]> {
+    const todosLosHorarios = this.generarHorarios();
+
+    const fechaInicio = new Date(`${fecha}T00:00:00Z`);
+    const fechaFin = new Date(`${fecha}T23:59:59Z`);
+
+    const citasExistentes = await this.prisma.citas.findMany({
+      where: {
+        fechaHora: {
+          gte: fechaInicio,
+          lt: fechaFin,
+        },
+      },
+    });
+
+    const horariosOcupados = citasExistentes.map((cita) =>
+      new Date(cita.fechaHora).toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'UTC',
+      }),
+    );
+
+    return todosLosHorarios.filter(
+      (horario) => !horariosOcupados.includes(horario),
+    );
+  }
+
+  private generarHorarios(): string[] {
+    const horarios: string[] = [];
+
+    for (let hora = 10; hora < 20; hora++) {
+      for (let minuto = 0; minuto < 60; minuto += 30) {
+        horarios.push(
+          `${hora.toString().padStart(2, '0')}:${minuto.toString().padStart(2, '0')}`,
+        );
+      }
+    }
+
+    return horarios;
+  }
+
+  async markAsCompleted(id: number) {
+    return this.prisma.citas.update({
+      where: { id },
+      data: { completada: true },
+    });
   }
 }
 

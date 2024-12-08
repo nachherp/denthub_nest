@@ -107,7 +107,7 @@ model paciente {
   ultimaVisita         DateTime?
   doloresDentales      String?
   condicionActual      String?
-
+tratamientoCompletado Boolean @default(false)
   // Diagnóstico
   labios               String?
   encias               String?
@@ -131,6 +131,7 @@ model paciente {
 model ProcedimientoAnterior {
   id        Int      @id @default(autoincrement())
   nombre    String
+  descripcion String
   pacienteId Int
   paciente  paciente @relation(fields: [pacienteId], references: [id])
   createdAt DateTime @default(now())
@@ -146,7 +147,7 @@ model citas {
   servicioId    Int
   servicio      servicios @relation(fields: [servicioId], references: [id])
   comentarios   String?
-
+completada Boolean @default(false)
   // Relación con el paciente
   pacienteId    Int
   paciente      paciente @relation(fields: [pacienteId], references: [id])
